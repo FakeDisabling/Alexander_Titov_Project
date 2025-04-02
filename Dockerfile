@@ -1,18 +1,27 @@
+##
+## Build stage
+##
+FROM maven:3-eclipse-temurin-17-alpine AS build
+WORKDIR /usr/src/app
 
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-
-WORKDIR /app
-
+# 1. Копируем проект (включая модули)
 COPY . .
 
-RUN mvn dependency:go-offline -B
+# 2. Кэшируем зависимости и собираем проект
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn clean package -DskipTests
 
-RUN mvn clean install -DskipTests
-
-FROM openjdk:17-jdk-slim
-
+##
+## Final stage
+##
+FROM openjdk:17-jdk-alpine
 WORKDIR /app
 
-COPY --from=build /app/api/target/api-0.0.1-SNAPSHOT.jar app.jar
+# 3. Копируем собранный JAR
+COPY --from=build /usr/src/app/api/target/api-0.0.1-SNAPSHOT.jar /app/runner.jar
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 4. Открываем порты для API и отладки
+EXPOSE 8080 5005
+
+# 5. Запуск приложения
+ENTRYPOINT ["java", "-jar", "/app/runner.jar"]
